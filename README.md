@@ -1,9 +1,9 @@
 # OnTheEstimationOfProductionLossesInOnGridPhotovoltaicInstallationsResultingFromGridFaults
 
-##Initialization
+## Initialization
 At the very beginning the python venv must be initialized and packages listed in requirements.txt needs to be installed.
 
-##Dataset preparation
+## Dataset preparation
 
 First of all the dataset file `datasets/orgdataset.tar.xz` need to be unpacked to `datasets/orgdataset.csv`. This file is an original dataset that contains raw data. Those data needs to be cleared and 
 transform before processing. To achieve that use the command below.  
@@ -12,7 +12,7 @@ transform before processing. To achieve that use the command below.
 ```
 It will transform original dataset into its clear version. New file will appear inside `datasets/dataset.csv`
 
-##Article images
+## Article images
 
 Run script to plot article images:
 ```
