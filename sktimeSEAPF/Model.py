@@ -190,7 +190,7 @@ class Model(BaseForecaster):
         ov = self.overlay_.overlay
         x = list(range(ov.shape[1]))
         return x
-    def plot_model(self, fig=None, ax=None, return_plot_items=False):
+    def plot_model(self, fig=None, ax=None, return_plot_items=False, base_model_rep = "Base model representation", mean_rep="Mean", hide_model=False):
         if ax is None or fig in None:
             fig, ax = plt.subplots(1)
         ov = self.overlay_.overlay
@@ -206,10 +206,11 @@ class Model(BaseForecaster):
         # mx = np.nanmax(ov, axis=0)
         # mi = np.nanmin(ov, axis=0)
 
-        l, = ax.plot(x, self.model_representation_, color="r", label="Base model representation")
-        #print(l)
-        lines.append(l)
-        l, = ax.plot(x, mean, color="orange", label="Mean")
+        if not hide_model:
+            l, = ax.plot(x, self.model_representation_, color="r", label=base_model_rep)
+            #print(l)
+            lines.append(l)
+        l, = ax.plot(x, mean, color="orange", label=mean_rep)
         lines.append(l)
         # ax.plot(x, mx, color="orange")
         # ax.plot(x, mi, color="orange")

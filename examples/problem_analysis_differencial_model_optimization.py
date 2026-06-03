@@ -23,7 +23,16 @@ parser = argparse.ArgumentParser(
                     prog='Generic search',
                     description='Create cm/..._result.csv file for selected model',
                     epilog='---')
-parser.add_argument("-m", "--model", help="A model that is selected to evaluation", choices=["seaippf", "nlastperiods", 'lstm'],
+parser.add_argument("-m", "--model", help="A model that is selected to evaluation", choices=[
+    "seaippf",
+    "nlastperiods",
+    'lr',
+    'mlp',
+    'rf',
+    'lstm',
+    'cnn',
+    'complex_mlp',
+],
                     required=True,
                     type=str)
 parser.add_argument("-d", "--dataset", help="validation dataset (installation) Id",
@@ -58,9 +67,39 @@ def seaippf_model(simulation, args):
         "stretch": [1, 1, True]
     })
 
+def lr_model(simulation, args):
+    simulation.generic_evaluate(parameters={
+        "window_size_days_10": [2, 30, True],
+        "degree": [5, 17, True],
+    })
+
+def rf_model(simulation, args):
+    simulation.generic_evaluate(parameters={
+        "window_size_days_10": [2, 30, True],
+        "n_estimators*5":[1,20, True]
+    })
+
+def mlp_model(simulation, args):
+    simulation.generic_evaluate(parameters={
+        "window_size_days_10": [2, 30, True],
+        "l1*5": [1, 8, True],
+        "l2*5": [1, 8, True],
+        "l3*5": [1, 8, True],
+    })
+
+def complex_mlp_model(simulation, args):
+    simulation.generic_evaluate(parameters={
+        "window_size_days_10": [2, 30, True],
+    })
+
 def lstm_model(simulation, args):
     simulation.generic_evaluate(parameters={
-        "window_size_days_10": [20, 60, True]
+        "window_size_days_10": [2, 30, True],
+    })
+
+def cnn_model(simulation, args):
+    simulation.generic_evaluate(parameters={
+        "complexity2^x": [1, 6, True],
     })
 
 def main(args):
@@ -69,8 +108,9 @@ def main(args):
     limit_voltage = 256
 
     a = Analysis()
+    logger.info(f"Operating on {args.model}")
     if args.model == "seaippf":
-        logger.info(f"Operating on {args.model}")
+
         model_factory = Analysis.get_seaippf_model
         s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
                        require_minimum_samples_count=18, file_prefix="seaippf", save_each_image=1,
@@ -78,20 +118,54 @@ def main(args):
                        healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
         seaippf_model(s, args)
     elif args.model == "nlastperiods":
-        logger.info(f"Operating on {args.model}")
         model_factory = Analysis.get_nlastperiods_model
         s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
                        require_minimum_samples_count=18, file_prefix="nlastperiods",
                        date_postfix=f"db{healthy_installation_id}",
                        healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
         lastNPeriods_model(s, args)
+    elif args.model == "lr":
+        model_factory = Analysis.get_lr_model
+        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
+                       require_minimum_samples_count=18, file_prefix="lr",
+                       date_postfix=f"db{healthy_installation_id}",
+                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
+        lr_model(s, args)
+    elif args.model == "rf":
+        model_factory = Analysis.get_rf_model
+        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
+                       require_minimum_samples_count=18, file_prefix="rf",
+                       date_postfix=f"db{healthy_installation_id}",
+                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
+        rf_model(s, args)
+    elif args.model == "mlp":
+        model_factory = Analysis.get_mlp_model
+        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
+                       require_minimum_samples_count=18, file_prefix="mlp",
+                       date_postfix=f"db{healthy_installation_id}",
+                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
+        mlp_model(s, args)
     elif args.model == "lstm":
-        logger.info(f"Operating on {args.model}")
-        s = Simulation(analysis=a, model_factory=get_lstm_model, limit_voltage=limit_voltage,
+        model_factory = Analysis.get_lstm_model
+        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
                        require_minimum_samples_count=18, file_prefix="lstm",
                        date_postfix=f"db{healthy_installation_id}",
                        healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
         lstm_model(s, args)
+    elif args.model == "cnn":
+        model_factory = Analysis.get_cnn_model
+        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
+                       require_minimum_samples_count=18, file_prefix="cnn",
+                       date_postfix=f"db{healthy_installation_id}",
+                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
+        cnn_model(s, args)
+    elif args.model == "complex_mlp":
+        model_factory = Analysis.get_complex_mlp_model
+        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
+                       require_minimum_samples_count=18, file_prefix="complex_mlp",
+                       date_postfix=f"db{healthy_installation_id}",
+                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
+        complex_mlp_model(s, args)
 
     else:
         logger.error(f"incorrect 'model' selection: {model}. Refer to help")

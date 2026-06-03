@@ -2,19 +2,31 @@ import pandas as pd
 import numpy as np
 import os
 from datetime import date
+from matplotlib import patches
 from matplotlib import pyplot as plt
 from matplotlib.backends.backend_pdf import PdfPages
 import matplotlib.dates as md
 from datetime import datetime
 from math import ceil, sqrt
 from datasets import utils
+from math import pow
 
+from sklearn.preprocessing import PolynomialFeatures
+from sklearn.pipeline import make_pipeline
+from sklearn.linear_model import LinearRegression
+from sklearn.neighbors import KNeighborsRegressor
+from sklearn.ensemble import RandomForestRegressor
+from sklearn.metrics import mean_absolute_error, mean_squared_error, max_error
+from sklearn.neural_network import MLPRegressor
+
+from utils.NonTSModelWrapper import NonTSModelWrapper
 from NLastPeriods.Model import Model as NLastPeriodsModel
 from SEAIPPF.Model import Model as SEAIPPFModel
 from SEAIPPF.Transformers.TransformerTest import TransformerTest
 from SEAIPPF.Transformers.TransformerSimpleFiltering import TransformerSimpleFiltering
 from sktimeSEAPF.Optimized import Optimized
-
+from ANN.model_wrappers import ModelLSTM, ModelCNN, ModelMLP
+from utils.Plotter import Plotter
 
 MOVING_AVG_WINDOW_SIZE = 4
 START_DATE = '2023-05-08'
@@ -41,11 +53,44 @@ DICTIONARY = {
         "model_vs_looses": "PV model prediction and PV looses",
         "model_vs_looses_metric": "PV looses and PV model prediction quality metric meaning",
         "y_adjustment": "Y-adjustment on Linear Regression estimation",
-        "model_representation": "Model representation on overlapped observation\nin solar elevation angle domain"
+        "model_representation": "Model representation on overlapped observation\nin solar elevation angle domain",
+        "Looses - ground truth": f"Looses (Power not generated) - ground true",
+        "Power - ground truth": f"Power (Power generated)",
+        "Energy Produced": "Energy Produced",
+        "Energy Lost": "Energy Lost",
+        "Proposed model representation": "Proposed model representation",
+        "Solar Elevation Angle Bucket": "Solar Elevation Angle Bucket",
+        "Base model representation":"Base model representation",
+        "Mean":"Mean"
     },
     "pl":{
         "Power": "Moc",
+        "Time": "Czas",
+        "Phase": "Faza",
+        "Power [kW]": "Moc [kW]",
         "Normalized power": "Moc znormalizowana",
+        "Voltage [V]": "Napięcie [V]",
+        "Installation power": "Moc zainstalowana",
+        "plot_power_title": "Moc PV i Moz zainstalowana dla wybranych instalacji",
+        "plot_voltage_title": "Moc PV i napięcia sieciowe",
+        "plot_potential_losses": "Energia wyprodukowana vs. energia utracona",
+        "Grid overvoltage": "Przekroczenia napięc",
+        "OV Threshold": "Próg napięcia",
+        "prone_installation_OV_vs_power": "Moc PV i napięcia sieciowe dla dla instalacji podatnej",
+        "healthy_installation_OV_vs_power": "Moc PV i napięcia sieciowe dla dla instalacji zdrowej",
+        "model_vs_power": "Progrnoza PV vs. wartość prawdziwa",
+        "model_vs_looses": "Progrnoza PV vs. strata",
+        "model_vs_looses_metric": "Interpretacja metryki jakościowej straty i prognozy modelu",
+        "y_adjustment": "Y-adjustment on Linear Regression estimation",
+        "model_representation": "Reprezentacja modelu na nałożonych obserwacjach\nw domenie kąta elewacji słońca",
+        "Looses - ground truth": f"Straty (Energia niewyprodukowana) - wartość prawdziwa",
+        "Power - ground truth": f"Moc (Energia wyprodukowana)",
+        "Energy Produced": "Energia wyprodukowana",
+        "Energy Lost": "Energia utracona",
+        "Proposed model representation": "Reprezentacja modelu",
+        "Solar Elevation Angle Bucket": "Zgrupowane kąty elewacji słońca",
+        "Base model representation":"Bazowy model",
+        "Mean":"Model średniej"
     }
 
 }
@@ -144,6 +189,147 @@ class Analysis():
 
         fig.tight_layout()
         return fig
+
+    def get_lr_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
+
+        degree = int(model_parameters.get("degree", 12))
+        model = NonTSModelWrapper(
+            lambda: (
+                make_pipeline(PolynomialFeatures(
+                    degree
+                ), LinearRegression()),
+                f"LR({degree})"
+            )
+        )
+
+        if fit_model: #fit only if it is needed (if fot data is defined)
+            model.fit(y=y_fit)
+
+        return model
+
+    def get_rf_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
+
+        n_estimators = int(model_parameters.get("n_estimators*5", 5))*5
+
+        model = NonTSModelWrapper(
+            lambda: (
+                RandomForestRegressor(n_estimators=n_estimators),
+                f"RF({n_estimators})"
+            )
+        )
+
+        if fit_model:  # fit only if it is needed (if fot data is defined)
+            model.fit(y=y_fit)
+
+        return model
+
+    def get_lstm_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
+
+        input_shape, kwargs = self.prepare_keras_args(
+            flatten_last_dim=False,
+            n=model_parameters.get("n", 10),
+            n_step=int(model_parameters.get("n_step", 1)),
+            dims=["x", "y'"],
+        )
+
+        model = NonTSModelWrapper(
+            lambda: (
+                ModelLSTM(input_shape=input_shape, output_shape=1),
+                f"LSTM()"
+            ),
+            **kwargs
+        )
+
+        if fit_model:  # fit only if it is needed (if fot data is defined)
+            model.fit(y=y_fit)
+
+        return model
+
+    def prepare_keras_args(self, n, n_step, dims, flatten_last_dim):
+
+        if n is not None and n > 0:
+            n = int(n)
+            input_shape=n * len(dims) if flatten_last_dim else (n, len(dims))
+            kwargs = {
+                "n": n,
+                "n_step": n_step
+            }
+        else:
+            input_shape=len(dims)
+            kwargs = {}
+
+        kwargs["dims"] = dims
+        kwargs["flatten_last_dim"] = flatten_last_dim
+
+        return input_shape, kwargs
+
+    def get_cnn_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
+
+        complexity = int(pow(2, model_parameters.get("complexity2^x",3)))
+
+        input_shape, kwargs = self.prepare_keras_args(
+            flatten_last_dim=False,
+            n=model_parameters.get("n", 10),
+            n_step=int(model_parameters.get("n_step", 1)),
+            dims=["x", "y'"],
+        )
+
+        model = NonTSModelWrapper(
+            lambda: (
+                ModelCNN(input_shape,1, complexity),
+                f"CNN()"
+            ),
+            **kwargs
+        )
+
+        if fit_model:  # fit only if it is needed (if fot data is defined)
+            model.fit(y=y_fit)
+
+        return model
+
+    def get_complex_mlp_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
+
+        input_shape, kwargs = self.prepare_keras_args(
+            flatten_last_dim=True,
+            n = model_parameters.get("n", 10),
+            n_step = int(model_parameters.get("n_step", 1)),
+            dims = ["x", "y'"],
+        )
+
+        model = NonTSModelWrapper(
+            lambda: (
+                ModelMLP(input_shape=input_shape, output_shape=1),
+                f"KerasMLP()"
+            ),
+            **kwargs
+        )
+
+        if fit_model and y_fit is not None:  # fit only if it is needed (if fot data is defined)
+            model.fit(y=y_fit)
+
+        return model
+
+    def get_mlp_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
+
+        l1 = int(model_parameters.get("l1*5", 5)) * 5
+        l2 = int(model_parameters.get("l2*5", 5)) * 5
+        l3 = int(model_parameters.get("l3*5", 5)) * 5
+
+        model = NonTSModelWrapper(
+            lambda: (
+                MLPRegressor(random_state=1, hidden_layer_sizes=(l1,l2,l3), max_iter=2000, tol=0.1),
+                f"mlp({(l1,l2,l3)})"
+            )
+        )
+
+        if fit_model:  # fit only if it is needed (if fot data is defined)
+            model.fit(y=y_fit)
+
+        return model
+
+
+
+
 
     def get_nlastperiods_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
         model = NLastPeriodsModel(N=model_parameters.get("N", 3))
@@ -296,6 +482,7 @@ class Analysis():
         df = self.data[[f"{installation_id}_NormalizedPower"] + voltage_columns]
         _ax = ax[0]
         lines = []
+        linesbottom = []
         for i, name in enumerate(voltage_columns):
             d = df[[name]].to_numpy()
             d[d<200] = np.nan
@@ -303,7 +490,7 @@ class Analysis():
             lines.append(l)
 
         l, = _ax.plot(df.index, [limit_voltage] * len(df.index), c="red", label=TEXTS["OV Threshold"])
-        lines.append(l)
+        linesbottom.append(l)
 
         mx = self.data[voltage_columns].agg("max", axis="columns")
         mx = np.where(mx >= limit_voltage, 1, 0)
@@ -322,15 +509,16 @@ class Analysis():
             ax[0].axvspan(df.index[b[0]], df.index[b[1]], color="gray", alpha=0.2, label=TEXTS["Grid overvoltage"])
             l = ax[1].axvspan(df.index[b[0]], df.index[b[1]], color="gray", alpha=0.2, label=TEXTS["Grid overvoltage"])
         if l is not None:
-            lines.append(l)
+            linesbottom.append(l)
 
         _ax = ax[1]
         d = df[[f"{installation_id}_NormalizedPower"]].to_numpy()
         l, = _ax.plot(df.index, d, label=TEXTS["Installation power"])
         _ax.plot(df.index, np.zeros(len(df)), label="_zeros", c="black")
-        lines.append(l)
+        linesbottom.append(l)
 
         ax[0].legend(lines, [l.get_label() for l in lines])
+        ax[1].legend(linesbottom, [l.get_label() for l in linesbottom])
 
         fig.suptitle(TEXTS["plot_voltage_title"] if title is None else title)
         ax[0].set_ylabel(TEXTS["Voltage [V]"])
@@ -353,16 +541,16 @@ class Analysis():
         lines = []
 
         # l, = _ax.plot(df.index, data, linestyle='dashed', marker='+', label=f"Looses (Energy not produced)")
-        l, = _ax.plot(df.index, df["NormalizedLooses"], label=f"Looses (Power not generated) - ground true", c="black", linestyle="dashed")
+        l, = _ax.plot(df.index, df["NormalizedLooses"], label=TEXTS["Looses - ground truth"], c="black", linestyle="dashed")
         lines.append(l)
 
-        l, = _ax.plot(df.index, df["NormalizedPower"], label=f"Power (Power generated)", c="blue")
+        l, = _ax.plot(df.index, df["NormalizedPower"], label=TEXTS["Power - ground truth"], c="blue")
         lines.append(l)
         zeros = np.zeros(len(df))
 
-        l = _ax.fill_between(x=df.index, y1=df["NormalizedPower"], color="blue", alpha=bg_alpha, label = "Energy Produced")
+        l = _ax.fill_between(x=df.index, y1=df["NormalizedPower"], color="blue", alpha=bg_alpha, label = TEXTS["Energy Produced"])
         lines.append(l)
-        l = _ax.fill_between(x=df.index, y1=df["NormalizedLooses"], color="black", alpha=bg_alpha, label = "Energy Lost")
+        l = _ax.fill_between(x=df.index, y1=df["NormalizedLooses"], color="black", alpha=bg_alpha, label = TEXTS["Energy Lost"] )
         lines.append(l)
 
         ax.plot(df.index, zeros, label="_zeros", c="black")
@@ -402,12 +590,18 @@ class Analysis():
 
         # fig1, ax1 = model.transformer.plot()
         # fig1.tight_layout()
-        fig2, ax2 = model.plot()
+
+        fig2, ax2 = model.transformer.plot()
+
+        # fig2, ax2 = model.plot()
         fig2.tight_layout()
         # model.plot(plots=["y_adjustment"])
-        fig3, ax3 = model.plot_model()
-        ax3.plot(model_stretch.plot_model_x_axis(), model_stretch.model_representation_, color="g", label="Proposed model representation")
+        fig3, ax3 = model.plot_model( hide_model=True, base_model_rep = TEXTS["Base model representation"], mean_rep=TEXTS["Mean"])
+
+        ax3.plot(model_stretch.plot_model_x_axis(), model_stretch.model_representation_, color="g", label=TEXTS["Proposed model representation"])
         ax3.legend()
+        ax3.set_ylabel(TEXTS["Normalized power"])
+        ax3.set_xlabel(TEXTS["Solar Elevation Angle Bucket"])
         # fig3.suptitle(TEXTS["model_representation"] + f"for dataset {healthy_installation_id}")
         fig4, ax4 = model.plot_y_adjustment()
         fig4.suptitle(TEXTS["y_adjustment"] + f"for dataset {healthy_installation_id}")
@@ -416,7 +610,202 @@ class Analysis():
             # fig1,
             fig2,
             fig3,
-            fig4]
+            fig4
+        ]
+
+    def plot_kde(self, prone_installation_id=3, healthy_installation_id=0, limit_voltage = 256, model_parameters={}, config=1):
+        # if model_factory is None:
+        #     raise ValueError("model_factory cannot be none!")
+        data = self.full_data
+        if config == 0:
+            data = self.full_data[self.full_data.first_valid_index():]
+            data = data[ONE_YEAR[0]:3*ONE_YEAR[1]//5]
+        fit_data = self.get_looses_curve(prone_installation_id, healthy_installation_id, limit_voltage,
+                                         data=data)
+
+        # print("len(fit_data)", len(fit_data))
+        model = self.get_seaippf_model(
+            healthy_installation_id,
+            y_fit=fit_data["NormalizedPower"],
+            model_parameters=model_parameters)
+
+        fig1, ax1 = model.plot()
+
+        fig2, ax2 = plt.subplots(1,2, figsize=(7,2))
+        fig2.subplots_adjust(wspace=1.01)
+        Plotter.plot_overlay_scatter(model.overlay.overlay, fig=fig2, ax= ax2[0])
+        ax2[0].set_ylabel(TEXTS["Normalized power"])
+        ax2[0].set_xlabel(TEXTS["Solar Elevation Angle Bucket"])
+        ax2[1].imshow(model.overlay.kde,  cmap='viridis', origin='lower',  aspect="auto")
+        ax2[1].set_ylabel("y_bins")
+        ax2[1].set_xlabel("x_bins")
+
+        arrow = patches.ConnectionPatch(
+            [20,0.25],
+            [5.5,7],
+            coordsA=ax2[0].transData,
+            coordsB=ax2[1].transData,
+            # Default shrink parameter is 0 so can be omitted
+            color="white",
+            arrowstyle="-|>",  # "normal" arrow
+            mutation_scale=32,  # controls arrow head size
+            linewidth=4,
+        )
+        fig2.patches.append(arrow)
+
+        arrow = patches.ConnectionPatch(
+            [20,0.25],
+            [5,7],
+            coordsA=ax2[0].transData,
+            coordsB=ax2[1].transData,
+            # Default shrink parameter is 0 so can be omitted
+            color="black",
+            arrowstyle="-|>",  # "normal" arrow
+            mutation_scale=30,  # controls arrow head size
+            linewidth=3,
+        )
+        fig2.patches.append(arrow)
+
+        return [
+            fig1,
+            fig2,
+            # fig3,
+            # fig4
+        ]
+
+
+    def plot_polyreg(self, prone_installation_id=3, healthy_installation_id=0, limit_voltage = 256, model_parameters={}, config=1):
+        # if model_factory is None:
+        #     raise ValueError("model_factory cannot be none!")
+        data = self.full_data
+        if config == 0:
+            data = self.full_data[self.full_data.first_valid_index():]
+            data = data[ONE_YEAR[0]:3*ONE_YEAR[1]//5]
+        fit_data = self.get_looses_curve(prone_installation_id, healthy_installation_id, limit_voltage,
+                                         data=data)
+
+        # print("len(fit_data)", len(fit_data))
+        model = self.get_seaippf_model(
+            healthy_installation_id,
+            y_fit=fit_data["NormalizedPower"],
+            model_parameters=model_parameters)
+
+        fig, ax = plt.subplots(1,4, figsize=(7,2))
+        fig.subplots_adjust(wspace=0.4, hspace=0.2)
+
+        model.transformer.plot_step(6, ax[0])
+        ax[0].set_title("Matrix")
+        ax[0].set_ylabel("y_bins")
+        ax[0].set_xlabel("x_bins")
+        model.transformer.plot_step(7, ax[1])
+        ax[1].set_title("LocalMax")
+        ax[1].set_xlabel("x_bins")
+        model.transformer.plot_step(8, ax[2])
+        ax[2].set_title("TakeLast")
+        ax[2].set_xlabel("x_bins")
+        model.transformer.plot_step(9, ax[3])
+        ax[3].set_title("Regression")
+        ax[3].set_xlabel("x_bins")
+        #
+        #
+        for s,e in zip([0,1,2], [1,2,3]):
+            arrow = patches.ConnectionPatch(
+                [20, 25-s*5],
+                [10+1, 25-s*5],
+                coordsA=ax[s].transData,
+                coordsB=ax[e].transData,
+                # Default shrink parameter is 0 so can be omitted
+                color="white",
+                arrowstyle="-|>",  # "normal" arrow
+                mutation_scale=18,  # controls arrow head size
+                linewidth=4,
+            )
+            fig.patches.append(arrow)
+            arrow = patches.ConnectionPatch(
+                [20, 25-s*5],
+                [10, 25-s*5],
+                coordsA=ax[s].transData,
+                coordsB=ax[e].transData,
+                # Default shrink parameter is 0 so can be omitted
+                color="black",
+                arrowstyle="-|>",  # "normal" arrow
+                mutation_scale=16,  # controls arrow head size
+                linewidth=3,
+            )
+            fig.patches.append(arrow)
+
+        return [
+            fig,
+        ]
+
+
+    def plot_stretching(self, prone_installation_id=3, healthy_installation_id=0, limit_voltage = 256, model_parameters={}, config=1):
+        # if model_factory is None:
+        #     raise ValueError("model_factory cannot be none!")
+        data = self.full_data
+        if config == 0:
+            data = self.full_data[self.full_data.first_valid_index():]
+            data = data[ONE_YEAR[0]:3*ONE_YEAR[1]//5]
+        fit_data = self.get_looses_curve(prone_installation_id, healthy_installation_id, limit_voltage,
+                                         data=data)
+
+        # print("len(fit_data)", len(fit_data))
+        model_parameters["stretch"] = True
+        model = self.get_seaippf_model(
+            healthy_installation_id,
+            y_fit=fit_data["NormalizedPower"],
+            model_parameters=model_parameters)
+
+        fig, ax = plt.subplots(1,2, figsize=(7,2))
+        fig.subplots_adjust(wspace=0.4, hspace=0.2)
+
+        model.transformer.plot_step(14, ax[0])
+        ax[0].set_title("Matrix")
+        ax[0].set_ylabel("y_bins")
+        ax[0].set_xlabel("x_bins")
+        model.transformer.plot_step(15, ax[1])
+        ax[1].set_title("Stretching")
+        ax[1].set_xlabel("x_bins")
+        #
+        #
+        for s,e in zip([0], [1]):
+            arrow = patches.ConnectionPatch(
+                [20, 20-s*5],
+                [10, 20-s*5],
+                coordsA=ax[s].transData,
+                coordsB=ax[e].transData,
+                # Default shrink parameter is 0 so can be omitted
+                color="white",
+                arrowstyle="-|>",  # "normal" arrow
+                mutation_scale=17,  # controls arrow head size
+                linewidth=4,
+            )
+            fig.patches.append(arrow)
+            arrow = patches.ConnectionPatch(
+                [20, 20-s*5],
+                [10, 20-s*5],
+                coordsA=ax[s].transData,
+                coordsB=ax[e].transData,
+                # Default shrink parameter is 0 so can be omitted
+                color="black",
+                arrowstyle="-|>",  # "normal" arrow
+                mutation_scale=16,  # controls arrow head size
+                linewidth=3,
+            )
+            fig.patches.append(arrow)
+
+        # Create a Rectangle patch
+        rect = patches.Rectangle((2, 26), 26, 3, linewidth=2, edgecolor='r', facecolor='none')
+        ax[0].add_patch(rect)
+        rect = patches.Rectangle((2, 0), 26, 1, linewidth=2, edgecolor='r', facecolor='none')
+        ax[0].add_patch(rect)
+        # Add the patch to the Axes
+
+
+        return [
+            fig,
+        ]
+
 
     def plot_model_vs_power(self, model_factory, prone_installation_id=3, healthy_installation_id=0, limit_voltage = 256, model_parameters={}):
         if model_factory is None:

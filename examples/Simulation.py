@@ -85,7 +85,7 @@ class Simulation():
             print(f"Saved in file: {file}")
 
         if new_best_found: #or (self.save_each_image is not None and self.current_iteration % self.save_each_image == 0):
-            self.model.plot()
+            #self.model.plot()
             file = self.output_dir + f"/images_{self.current_iteration}.pdf"
             pp = PdfPages(file)
             for i in plt.get_fignums():
@@ -145,6 +145,7 @@ class Simulation():
                     y_fit=y_train
                 )
                 y_pred = self.model.predict(fh=y_true.index)
+                del self.model
 
             results["i"].append(i)
             results["time"].append(timer.seconds_elapsed)

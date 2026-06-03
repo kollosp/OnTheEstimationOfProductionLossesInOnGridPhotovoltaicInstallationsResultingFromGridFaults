@@ -253,6 +253,31 @@ class Plotter:
             return fig, ax
 
     @staticmethod
+    def plot_overlay_scatter(data: List[np.array], fig=None, ax=None, return_plot_items=False):
+        if ax is None or fig is None:
+            fig, ax = plt.subplots(1)
+
+        print(data)
+        x = list(range(data.shape[1]))
+        prefix = ""
+        for y in range(data.shape[0]):
+            ax.scatter(x, data[y], color="b", alpha=0.05, label=prefix+"PV")
+            prefix = "_"
+
+        # x = list(range(data.shape[1]))
+        # l = None
+        # prefix = ""
+        # for y in range(data.shape[0]):
+        #     l, =
+        #     prefix = "_"
+        #
+        # if return_plot_items:
+        #     return fig, ax, l
+        # else:
+        return fig, ax
+
+
+    @staticmethod
     def plot_2D_histograms(histogram: np.array,kde: np.array, fig=None, ax=None):
         count = kde.shape[1] # number of plots to paint
         rows = 6

@@ -114,7 +114,8 @@ def main(args):
             file_prefix = path
         model_factories = {
             "seaippf": Analysis.get_seaippf_model,
-            "nlastperiods": Analysis.get_nlastperiods_model
+            "nlastperiods": Analysis.get_nlastperiods_model,
+            "lr": Analysis.get_lr_model
         }
 
         if not model in model_factories:

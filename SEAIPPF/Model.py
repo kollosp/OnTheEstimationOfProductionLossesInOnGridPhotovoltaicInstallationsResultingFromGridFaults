@@ -98,6 +98,7 @@ class Model(SEAPF):
                 params["transformer__" + tp] = transformer_params[tp]
         return params
 
-    def plot(self, plots=["overlay", "model", "y_adjustment"]):
-        super(Model, self).plot()
-        return self.transformer.plot()
+    # method is not overriden
+    # def plot(self, plots=["overlay", "model", "y_adjustment"]):
+    #     super(Model, self).plot()
+    #     return self.transformer.plot()

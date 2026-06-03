@@ -96,6 +96,16 @@ class TransformerTest(BaseEstimator,TransformerMixin):
     def __str__(self):
         return f"TransformerTest({self.get_params()})"
 
+    def plot_step(self, step_index, ax=None, fig=None):
+
+        (name, result) = self.steps_[step_index]
+
+        ax.set_title(f"{step_index + 1}: {name}", fontdict={"fontsize": 8})
+        sns.heatmap(result.reshape(self.shape_), cmap='viridis', ax=ax)
+        ax.invert_yaxis()
+        ax.set_xticks([])
+        ax.set_yticks([])
+
     def plot(self, rows = 3, ax=None, fig=None):
         count = sum(name[0] != "_" for name, _ in self.steps_)
         axis = ceil(count / rows ), rows
@@ -103,7 +113,8 @@ class TransformerTest(BaseEstimator,TransformerMixin):
         if ax is None or fig is None:
             fig, ax = plt.subplots(axis[1], axis[0])
 
-        fig.suptitle("Model's transformation chain steps applied to the heatmap")
+        # fig.suptitle("Model's transformation chain steps applied to the heatmap")
+        fig.suptitle("Transformacje wykonywana na macierzowej reprezentacji modelu")
         _ax = [ax[i, j] for j in range(axis[0]) for i in range(axis[1])]
 
         i = 0
@@ -114,9 +125,9 @@ class TransformerTest(BaseEstimator,TransformerMixin):
                 _ax[i].invert_yaxis()
                 _ax[i].set_xticks([])
                 _ax[i].set_yticks([])
+
                 i += 1
         while i<len(_ax):
-
             _ax[i].remove()
             i += 1
         return fig, ax
