@@ -44,6 +44,7 @@ def main():
     # Find and display the best score
 
     best_rows = pd.concat([find_best_score(csv_file, column) for csv_file in csv_file])
+    best_rows = best_rows.sort_values("mae_mean")
 
     print(f"Best scores for column \n{best_rows.to_string()}")
     
