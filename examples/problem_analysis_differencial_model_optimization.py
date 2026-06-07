@@ -95,6 +95,8 @@ def mlp_model(simulation, args):
 def complex_mlp_model(simulation, args):
     simulation.generic_evaluate(parameters={
         "window_size_days_10": [2, 30, True],
+        "n": [1, 10, True],
+        "n_step": [1, 10, True],
     })
 
 def lstm_model(simulation, args):
@@ -105,6 +107,8 @@ def lstm_model(simulation, args):
 def cnn_model(simulation, args):
     simulation.generic_evaluate(parameters={
         "complexity2^x": [1, 6, True],
+        "n": [2, 10, True],
+        "n_step": [1, 10, True],
     })
 
 MODEL_CONFIGS = {
@@ -119,6 +123,7 @@ MODEL_CONFIGS = {
 }
 
 def get_simulation_kwargs(model, dataset):
+
     prone_installation_id = 3
     healthy_installation_id = dataset
     limit_voltage = 256
@@ -156,6 +161,7 @@ def run_model(model, dataset, args):
         return
 
     a = Analysis()
+
     simulation_kwargs["analysis"] = a
     s = Simulation(**simulation_kwargs)
     logger.info(f"Starting simulation for model={model}, dataset={dataset}")

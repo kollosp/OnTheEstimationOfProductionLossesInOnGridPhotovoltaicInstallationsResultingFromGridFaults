@@ -63,7 +63,7 @@ class Simulation():
 
     def save_best_model(self, value, model_parameters, results_df):
         if not os.path.exists(self.output_dir):
-            os.mkdir(self.output_dir)
+            os.makedirs(self.output_dir)
 
         self.build_result_list(value, model_parameters, results_df)
 
