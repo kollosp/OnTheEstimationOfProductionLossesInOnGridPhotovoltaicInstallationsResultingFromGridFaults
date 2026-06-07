@@ -3,6 +3,7 @@ import os
 from Analysis import Analysis
 from Analysis import TEXTS
 from Simulation import Simulation
+from problem_analysis_model_configs import MODEL_CHOICES, MODEL_CONFIGS
 
 from matplotlib import pyplot as plt
 import logging
@@ -25,16 +26,7 @@ parser = argparse.ArgumentParser(
                     prog='Generic search',
                     description='Create cm/..._result.csv file for selected model',
                     epilog='---')
-parser.add_argument("-m", "--model", help="A model that is selected to evaluation", choices=[
-    "seaippf",
-    "nlastperiods",
-    'lr',
-    'mlp',
-    'rf',
-    'lstm',
-    'cnn',
-    'complex_mlp',
-],
+parser.add_argument("-m", "--model", help="A model that is selected to evaluation", choices=MODEL_CHOICES,
                     required=True,
                     nargs="+",
                     type=str)
@@ -42,85 +34,6 @@ parser.add_argument("-d", "--dataset", help="validation dataset (installation) I
                     type=int, nargs="+", default=[0])
 parser.add_argument("--dry-run", "--dry_run", help="Log planned runs without starting simulations",
                     action="store_true", dest="dry_run")
-
-def get_lstm_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
-    # model = LSTMFCNRegressor()
-    model = AutoARIMA(
-        sp=12, d=0, max_p=2, max_q=2, suppress_warnings=True
-    )
-
-    if fit_model:  # fit only if it is needed (if fot data is defined)
-        model.fit(y=y_fit)
-
-    return model
-
-def lastNPeriods_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "N": [1, 30, True],
-        "window_size_days_10": [4,4,True]
-    })
-
-def seaippf_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "Bins": [20, 40, True],
-        "window_size_days_10": [20, 40, True], # at 31 elbow
-        "conv2D_shape_factor": [0, 0.05, False],
-        "regressor_degrees": [8, 15, True],
-        "bandwidth": [0.01, 0.1, False],
-        "iterations": [1, 6, True],
-        "iterative_regressor_degrees": [10, 15,True],
-        "stretch": [1, 1, True]
-    })
-
-def lr_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "window_size_days_10": [2, 30, True],
-        "degree": [5, 17, True],
-    })
-
-def rf_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "window_size_days_10": [2, 30, True],
-        "n_estimators*5":[1,20, True]
-    })
-
-def mlp_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "window_size_days_10": [2, 30, True],
-        "l1*5": [1, 8, True],
-        "l2*5": [1, 8, True],
-        "l3*5": [1, 8, True],
-    })
-
-def complex_mlp_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "window_size_days_10": [2, 30, True],
-        "n": [1, 10, True],
-        "n_step": [1, 10, True],
-    })
-
-def lstm_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "window_size_days_10": [2, 30, True],
-    })
-
-def cnn_model(simulation, args):
-    simulation.generic_evaluate(parameters={
-        "complexity2^x": [1, 6, True],
-        "n": [2, 10, True],
-        "n_step": [1, 10, True],
-    })
-
-MODEL_CONFIGS = {
-    "seaippf": (Analysis.get_seaippf_model, seaippf_model, {"save_each_image": 1}),
-    "nlastperiods": (Analysis.get_nlastperiods_model, lastNPeriods_model, {}),
-    "lr": (Analysis.get_lr_model, lr_model, {}),
-    "rf": (Analysis.get_rf_model, rf_model, {}),
-    "mlp": (Analysis.get_mlp_model, mlp_model, {}),
-    "lstm": (Analysis.get_lstm_model, lstm_model, {}),
-    "cnn": (Analysis.get_cnn_model, cnn_model, {}),
-    "complex_mlp": (Analysis.get_complex_mlp_model, complex_mlp_model, {}),
-}
 
 def get_simulation_kwargs(model, dataset):
 
