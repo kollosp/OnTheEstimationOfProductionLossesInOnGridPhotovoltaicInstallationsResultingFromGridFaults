@@ -12,6 +12,8 @@ import pandas as pd
 from os import listdir
 from os.path import isfile, join
 import argparse
+from itertools import product
+from multiprocessing import Pool
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sktime.regression.deep_learning.lstmfcn import LSTMFCNRegressor
@@ -34,9 +36,12 @@ parser.add_argument("-m", "--model", help="A model that is selected to evaluatio
     'complex_mlp',
 ],
                     required=True,
+                    nargs="+",
                     type=str)
 parser.add_argument("-d", "--dataset", help="validation dataset (installation) Id",
-                    type=int, default=0)
+                    type=int, nargs="+", default=[0])
+parser.add_argument("--dry-run", "--dry_run", help="Log planned runs without starting simulations",
+                    action="store_true", dest="dry_run")
 
 def get_lstm_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
     # model = LSTMFCNRegressor()
@@ -102,74 +107,90 @@ def cnn_model(simulation, args):
         "complexity2^x": [1, 6, True],
     })
 
-def main(args):
+MODEL_CONFIGS = {
+    "seaippf": (Analysis.get_seaippf_model, seaippf_model, {"save_each_image": 1}),
+    "nlastperiods": (Analysis.get_nlastperiods_model, lastNPeriods_model, {}),
+    "lr": (Analysis.get_lr_model, lr_model, {}),
+    "rf": (Analysis.get_rf_model, rf_model, {}),
+    "mlp": (Analysis.get_mlp_model, mlp_model, {}),
+    "lstm": (Analysis.get_lstm_model, lstm_model, {}),
+    "cnn": (Analysis.get_cnn_model, cnn_model, {}),
+    "complex_mlp": (Analysis.get_complex_mlp_model, complex_mlp_model, {}),
+}
+
+def get_simulation_kwargs(model, dataset):
     prone_installation_id = 3
-    healthy_installation_id = args.dataset
+    healthy_installation_id = dataset
     limit_voltage = 256
 
+    model_factory, evaluate_model, extra_simulation_kwargs = MODEL_CONFIGS[model]
+    simulation_kwargs = {
+        "model_factory": model_factory,
+        "limit_voltage": limit_voltage,
+        "require_minimum_samples_count": 18,
+        "file_prefix": model,
+        "date_postfix": f"db{healthy_installation_id}",
+        "healthy_installation_id": healthy_installation_id,
+        "prone_installation_id": prone_installation_id,
+    }
+    simulation_kwargs.update(extra_simulation_kwargs)
+    return evaluate_model, simulation_kwargs
+
+def run_model(model, dataset, args):
+    logger.info(f"Preparing model={model}, dataset={dataset}")
+
+    evaluate_model, simulation_kwargs = get_simulation_kwargs(model, dataset)
+    log_simulation_kwargs = {
+        key: value for key, value in simulation_kwargs.items() if key != "model_factory"
+    }
+    logger.info(
+        "Simulation configuration for model=%s, dataset=%s: model_factory=%s, kwargs=%s",
+        model,
+        dataset,
+        simulation_kwargs["model_factory"].__name__,
+        log_simulation_kwargs,
+    )
+
+    if args.dry_run:
+        logger.info(f"Dry run: skipping simulation for model={model}, dataset={dataset}")
+        return
+
     a = Analysis()
-    logger.info(f"Operating on {args.model}")
-    if args.model == "seaippf":
+    simulation_kwargs["analysis"] = a
+    s = Simulation(**simulation_kwargs)
+    logger.info(f"Starting simulation for model={model}, dataset={dataset}")
+    evaluate_model(s, args)
+    logger.info(f"Finished simulation for model={model}, dataset={dataset}")
 
-        model_factory = Analysis.get_seaippf_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="seaippf", save_each_image=1,
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        seaippf_model(s, args)
-    elif args.model == "nlastperiods":
-        model_factory = Analysis.get_nlastperiods_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="nlastperiods",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        lastNPeriods_model(s, args)
-    elif args.model == "lr":
-        model_factory = Analysis.get_lr_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="lr",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        lr_model(s, args)
-    elif args.model == "rf":
-        model_factory = Analysis.get_rf_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="rf",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        rf_model(s, args)
-    elif args.model == "mlp":
-        model_factory = Analysis.get_mlp_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="mlp",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        mlp_model(s, args)
-    elif args.model == "lstm":
-        model_factory = Analysis.get_lstm_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="lstm",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        lstm_model(s, args)
-    elif args.model == "cnn":
-        model_factory = Analysis.get_cnn_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="cnn",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        cnn_model(s, args)
-    elif args.model == "complex_mlp":
-        model_factory = Analysis.get_complex_mlp_model
-        s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
-                       require_minimum_samples_count=18, file_prefix="complex_mlp",
-                       date_postfix=f"db{healthy_installation_id}",
-                       healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
-        complex_mlp_model(s, args)
+def main(args):
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(processName)s %(levelname)s: %(message)s")
+    runs = list(product(args.model, args.dataset))
+    logger.info(
+        "Requested %s run(s): models=%s, datasets=%s, dry_run=%s",
+        len(runs),
+        args.model,
+        args.dataset,
+        args.dry_run,
+    )
 
-    else:
-        logger.error(f"incorrect 'model' selection: {model}. Refer to help")
-    logger.info(f"Done.")
+    if args.dry_run:
+        logger.info("Dry run enabled; simulations will not be started.")
+        for model, dataset in runs:
+            run_model(model, dataset, args)
+        logger.info("Dry run done.")
+        return
+
+    if len(runs) == 1:
+        model, dataset = runs[0]
+        logger.info("Running a single simulation without Pool.")
+        run_model(model, dataset, args)
+        logger.info("Done.")
+        return
+
+    logger.info(f"Running {len(runs)} simulations in parallel using Pool.")
+    with Pool() as pool:
+        pool.starmap(run_model, [(model, dataset, args) for model, dataset in runs])
+    logger.info("Done.")
 
 if __name__ == "__main__":
     args = parser.parse_args()
