@@ -36,7 +36,7 @@ parser.add_argument("-m", "--model", help="A model that is selected to evaluatio
                     required=True,
                     type=str)
 parser.add_argument("-d", "--dataset", help="validation dataset (installation) Id",
-                    type=int, default=0)
+                    type=int, default=2)
 
 def get_lstm_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
     # model = LSTMFCNRegressor()
@@ -90,6 +90,8 @@ def mlp_model(simulation, args):
 def complex_mlp_model(simulation, args):
     simulation.generic_evaluate(parameters={
         "window_size_days_10": [2, 30, True],
+        "n": [1, 10, True],
+        "n_step": [1, 10, True],
     })
 
 def lstm_model(simulation, args):
@@ -100,9 +102,12 @@ def lstm_model(simulation, args):
 def cnn_model(simulation, args):
     simulation.generic_evaluate(parameters={
         "complexity2^x": [1, 6, True],
+        "n": [2, 10, True],
+        "n_step": [1, 10, True],
     })
 
 def main(args):
+    print("Execution started")
     prone_installation_id = 3
     healthy_installation_id = args.dataset
     limit_voltage = 256
@@ -153,6 +158,7 @@ def main(args):
                        healthy_installation_id=healthy_installation_id, prone_installation_id=prone_installation_id)
         lstm_model(s, args)
     elif args.model == "cnn":
+        print("Entering CNN model optimization")
         model_factory = Analysis.get_cnn_model
         s = Simulation(analysis=a, model_factory=model_factory, limit_voltage=limit_voltage,
                        require_minimum_samples_count=18, file_prefix="cnn",
@@ -168,7 +174,7 @@ def main(args):
         complex_mlp_model(s, args)
 
     else:
-        logger.error(f"incorrect 'model' selection: {model}. Refer to help")
+        logger.error(f"incorrect 'model' selection: {args.model}. Refer to help")
     logger.info(f"Done.")
 
 if __name__ == "__main__":

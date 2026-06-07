@@ -290,9 +290,9 @@ class Analysis():
     def get_complex_mlp_model(self, installation_id=None, y_fit=None, model_parameters={}, fit_model=True):
 
         input_shape, kwargs = self.prepare_keras_args(
-            flatten_last_dim=True,
+            flatten_last_dim=False,
             n = model_parameters.get("n", 10),
-            n_step = int(model_parameters.get("n_step", 1)),
+            n_step = int(model_parameters.get("n_step", 2)),
             dims = ["x", "y'"],
         )
 

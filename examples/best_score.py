@@ -57,6 +57,8 @@ def main():
     )
     best_rows = best_rows.sort_values("mae_mean")
 
+    best_rows.to_csv(Path("cm") / "best_scores.csv", index=True)
+
     best_rows = best_rows.reset_index().rename(columns={"index": "case"})
     best_rows[["Dataset", "Model", "Subset"]] = best_rows["case"].str.extract(
         r"^([^_]+)_(.+?)(?:_(validation))?$"
