@@ -34,25 +34,25 @@ if __name__ == "__main__":
     txt += a.prone_healthy_classification(installation_ids=list(range(0,4)), limit_voltage=limit_voltage)
 
     figures = [
-        # a.plot_power(),
-        # a.plot_voltage(installation_id=prone_installation_id, title=TEXTS["prone_installation_OV_vs_power"],
-        #                limit_voltage=limit_voltage),  # prone installation
-        # a.plot_voltage(installation_id=healthy_installation_id, title=TEXTS["healthy_installation_OV_vs_power"],
-        #                limit_voltage=limit_voltage),  # healthy installation
-        # a.plot_potential_losses(prone_installation_id=prone_installation_id,
-        #                         healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage),
-        # a.plot_model_vs_power(model_factory=model_factory, prone_installation_id=prone_installation_id,
-        #                       healthy_installation_id=healthy_installation_id, model_parameters=model_params),
-        # a.plot_model_vs_looses(model_factory=model_factory, prone_installation_id=prone_installation_id,
-        #                        healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage,
-        #                        model_parameters=model_params),
-        # a.plot_model_vs_looses_metric(model_factory=model_factory, prone_installation_id=prone_installation_id,
-        #                               healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage,
-        #                               model_parameters=model_params),
-        # a.plot_seaippf_model_parameters(prone_installation_id=prone_installation_id,
-        #                                 healthy_installation_id=healthy_installation_id, config=0, model_parameters=model_params),
-        # a.plot_model_test_dataset(prone_installation_id=prone_installation_id,
-        #                           healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage)
+        a.plot_power(),
+        a.plot_voltage(installation_id=prone_installation_id, title=TEXTS["prone_installation_OV_vs_power"],
+                       limit_voltage=limit_voltage),  # prone installation
+        a.plot_voltage(installation_id=healthy_installation_id, title=TEXTS["healthy_installation_OV_vs_power"],
+                       limit_voltage=limit_voltage),  # healthy installation
+        a.plot_potential_losses(prone_installation_id=prone_installation_id,
+                                healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage),
+        a.plot_model_vs_power(model_factory=model_factory, prone_installation_id=prone_installation_id,
+                              healthy_installation_id=healthy_installation_id, model_parameters=model_params),
+        a.plot_model_vs_looses(model_factory=model_factory, prone_installation_id=prone_installation_id,
+                               healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage,
+                               model_parameters=model_params),
+        a.plot_model_vs_looses_metric(model_factory=model_factory, prone_installation_id=prone_installation_id,
+                                      healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage,
+                                      model_parameters=model_params),
+        a.plot_seaippf_model_parameters(prone_installation_id=prone_installation_id,
+                                        healthy_installation_id=healthy_installation_id, config=0, model_parameters=model_params),
+        a.plot_model_test_dataset(prone_installation_id=prone_installation_id,
+                                  healthy_installation_id=healthy_installation_id, limit_voltage=limit_voltage),
         a.plot_kde(prone_installation_id=prone_installation_id,
                    healthy_installation_id=healthy_installation_id, config=0, model_parameters=model_params),
         a.plot_polyreg(prone_installation_id=prone_installation_id,

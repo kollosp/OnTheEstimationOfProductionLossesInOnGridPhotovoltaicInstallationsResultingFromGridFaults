@@ -142,3 +142,5 @@ if __name__ == "__main__":
 
     file_out = os.path.join(file_path, "dataset.csv")
     df.to_csv(file_out)
+
+    print(df)
