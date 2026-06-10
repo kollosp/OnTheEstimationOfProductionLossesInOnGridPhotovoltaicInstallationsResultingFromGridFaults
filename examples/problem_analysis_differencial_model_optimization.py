@@ -108,6 +108,8 @@ def run_model(model, dataset, args):
 
     simulation_kwargs["analysis"] = a
     s = Simulation(**simulation_kwargs)
+    if args.continue_evaluation:
+        logger.info("Continue mode output directory for model=%s, dataset=%s: %s", model, dataset, s.output_dir)
     logger.info(f"Starting simulation for model={model}, dataset={dataset}")
     evaluate_model(s, args)
     logger.info(f"Finished simulation for model={model}, dataset={dataset}")

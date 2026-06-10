@@ -32,8 +32,10 @@ class Simulation():
         self.save_each_image = save_each_image
         self.result_list = []
         today = datetime.now()
+        self.continue_evaluation = output_dir is not None
         if output_dir is not None:
             self.output_dir = output_dir
+            print(f"Continue mode: using output directory {self.output_dir}")
         elif validation: #use same timedate directory name as was used during evaluation
             # self.txt_datetime = file_prefix + "_results.csv"
             self.output_dir =  file_prefix
@@ -55,6 +57,8 @@ class Simulation():
             df = pd.read_csv(file)
             self.result_list = df.to_dict("records")
             self.current_iteration = len(self.result_list)
+            if self.continue_evaluation:
+                print(f"Continue mode: loaded {len(self.result_list)} result(s) from {file}")
 
     def get_cached_value(self, model_parameters):
         file = self.get_result_file()
