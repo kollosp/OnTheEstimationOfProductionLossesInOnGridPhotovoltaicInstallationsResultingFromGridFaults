@@ -20,7 +20,7 @@ def root_mean_squared_error(y_true, y_pred):
 
 class Simulation():
     def __init__(self, analysis, model_factory, prone_installation_id=3, healthy_installation_id=0,
-                 limit_voltage=256, require_minimum_samples_count=18, file_prefix = "", date_postfix="", save_each_image=None, validation=False):
+                 limit_voltage=256, require_minimum_samples_count=18, file_prefix = "", date_postfix="", save_each_image=None, validation=False, output_dir=None):
         self.analysis = analysis
         self.model_factory = model_factory
         self.prone_installation_id = prone_installation_id
@@ -32,7 +32,9 @@ class Simulation():
         self.save_each_image = save_each_image
         self.result_list = []
         today = datetime.now()
-        if validation: #use same timedate directory name as was used during evaluation
+        if output_dir is not None:
+            self.output_dir = output_dir
+        elif validation: #use same timedate directory name as was used during evaluation
             # self.txt_datetime = file_prefix + "_results.csv"
             self.output_dir =  file_prefix
         else: # set timedate directory name
@@ -42,8 +44,31 @@ class Simulation():
 
         self.current_iteration = 0
         self.model = None
+        self.load_result_list()
 
-    def build_result_list(self, value, model_parameters, results_df):
+    def get_result_file(self):
+        return self.output_dir + f"/result.csv"
+
+    def load_result_list(self):
+        file = self.get_result_file()
+        if os.path.exists(file):
+            df = pd.read_csv(file)
+            self.result_list = df.to_dict("records")
+            self.current_iteration = len(self.result_list)
+
+    def get_cached_value(self, model_parameters):
+        file = self.get_result_file()
+        if not os.path.exists(file):
+            return None
+
+        df = pd.read_csv(file)
+        for key, value in model_parameters.items():
+            df = df[df[key] == value]
+        if len(df) == 0:
+            return None
+        return df.iloc[0]["value"]
+
+    def build_result_row(self, value, model_parameters, results_df):
         results_df_means = results_df.mean()
         results_df_std = results_df.std()
         results_df_max = results_df.max()
@@ -58,6 +83,10 @@ class Simulation():
             append[k + "_std"] = results_df_std[k]
             append[k + "_max"] = results_df_max[k]
             append[k + "_min"] = results_df_min[k]
+        return append
+
+    def build_result_list(self, value, model_parameters, results_df):
+        append = self.build_result_row(value, model_parameters, results_df)
         self.result_list.append(append)
         return self.result_list
 
@@ -77,7 +106,7 @@ class Simulation():
             print(f"Current value {value} is worse than current best {self.current_best_value}")
 
         if self.current_iteration % 10 == 0 or new_best_found:
-            file =  self.output_dir + f"/result.csv"
+            file = self.get_result_file()
             df = pd.DataFrame(self.result_list)
             df["healthy_installation_id"] = self.healthy_installation_id
             df["prone_installation_id"] = self.prone_installation_id
@@ -106,6 +135,11 @@ class Simulation():
     def __call__(self, params=[], param_names=None):
         model_parameters = {key: value for key, value in zip(param_names, params)}
         print(f"Next interation: {self.current_iteration}", model_parameters)
+        value = self.get_cached_value(model_parameters)
+        if value is not None:
+            print("Using cached evaluation for config: ", model_parameters, "with MAE: ", value)
+            return value
+
         df = self.call(model_parameters)
 
         return self.save_best_model(df["mae"].mean(), model_parameters, df)
@@ -177,6 +211,11 @@ class Simulation():
 
     def validation(self, model_parameters):
         print(model_parameters)
+        value = self.get_cached_value(model_parameters)
+        if value is not None:
+            print("Using cached evaluation for config: ", model_parameters, "with MAE: ", value)
+            return value
+
         df = self.call(model_parameters, validation=True)
         return self.save_best_model(df["mae"].mean(), model_parameters, df)
 

@@ -15,6 +15,7 @@ from os.path import isfile, join
 import argparse
 from itertools import product
 from multiprocessing import Pool
+from pathlib import Path
 import seaborn as sns
 import matplotlib.pyplot as plt
 from sktime.regression.deep_learning.lstmfcn import LSTMFCNRegressor
@@ -34,6 +35,8 @@ parser.add_argument("-d", "--dataset", help="validation dataset (installation) I
                     type=int, nargs="+", default=[0])
 parser.add_argument("--dry-run", "--dry_run", help="Log planned runs without starting simulations",
                     action="store_true", dest="dry_run")
+parser.add_argument("--continue", help="Continue newest matching run from cm instead of creating a new directory",
+                    action="store_true", dest="continue_evaluation")
 
 def get_simulation_kwargs(model, dataset):
 
@@ -54,10 +57,38 @@ def get_simulation_kwargs(model, dataset):
     simulation_kwargs.update(extra_simulation_kwargs)
     return evaluate_model, simulation_kwargs
 
+def get_continue_output_dir(model, dataset):
+    cm_dir = Path("cm")
+    if not cm_dir.exists():
+        return None
+
+    suffix = f"_db{dataset}_{model}"
+    candidates = [
+        path
+        for path in cm_dir.iterdir()
+        if path.is_dir() and path.name.endswith(suffix) and (path / "result.csv").exists()
+    ]
+    if len(candidates) == 0:
+        return None
+
+    return str(sorted(candidates)[-1])
+
 def run_model(model, dataset, args):
     logger.info(f"Preparing model={model}, dataset={dataset}")
 
     evaluate_model, simulation_kwargs = get_simulation_kwargs(model, dataset)
+    if args.continue_evaluation:
+        output_dir = get_continue_output_dir(model, dataset)
+        if output_dir is None:
+            logger.warning(
+                "Continue requested but no previous result found for model=%s, dataset=%s. Creating a new run.",
+                model,
+                dataset,
+            )
+        else:
+            simulation_kwargs["output_dir"] = output_dir
+            logger.info("Continuing evaluation in directory: %s", output_dir)
+
     log_simulation_kwargs = {
         key: value for key, value in simulation_kwargs.items() if key != "model_factory"
     }
@@ -85,11 +116,12 @@ def main(args):
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(processName)s %(levelname)s: %(message)s")
     runs = list(product(args.model, args.dataset))
     logger.info(
-        "Requested %s run(s): models=%s, datasets=%s, dry_run=%s",
+        "Requested %s run(s): models=%s, datasets=%s, dry_run=%s, continue=%s",
         len(runs),
         args.model,
         args.dataset,
         args.dry_run,
+        args.continue_evaluation,
     )
 
     if args.dry_run:
