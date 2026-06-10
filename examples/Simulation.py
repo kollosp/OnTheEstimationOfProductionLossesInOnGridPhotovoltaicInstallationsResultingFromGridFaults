@@ -54,7 +54,7 @@ class Simulation():
     def load_result_list(self):
         file = self.get_result_file()
         if os.path.exists(file):
-            df = pd.read_csv(file)
+            df = pd.read_csv(file, index_col=0)
             self.result_list = df.to_dict("records")
             self.current_iteration = len(self.result_list)
             if self.continue_evaluation:
@@ -65,7 +65,7 @@ class Simulation():
         if not os.path.exists(file):
             return None
 
-        df = pd.read_csv(file)
+        df = pd.read_csv(file, index_col=0)
         for key, value in model_parameters.items():
             df = df[df[key] == value]
         if len(df) == 0:
