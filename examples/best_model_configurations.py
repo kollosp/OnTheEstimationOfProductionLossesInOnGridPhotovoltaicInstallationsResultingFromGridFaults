@@ -27,7 +27,8 @@ MODEL_NAMES = {
     "nlastperiods": "LAGGED",
     "seaippf": "PROPOSED",
 }
-FLOAT_PATTERN = re.compile(r"^-?\d+\.\d+(?:e[+-]?\d+)?$", re.IGNORECASE)
+FLOAT_PATTERN = re.compile(r"^-?\d+(?:\.\d+)?(?:e[+-]?\d+)?$", re.IGNORECASE)
+MULTIPLICATION_SUFFIX_PATTERN = re.compile(r"^(.+)\*(\d+(?:\.\d+)?)$")
 LATEX_REPLACEMENTS = {
     "\\": r"\textbackslash{}",
     "&": r"\&",
@@ -73,15 +74,57 @@ def display_model_name(model):
     return MODEL_NAMES.get(model, str(model).upper())
 
 
+def format_numeric_value(value):
+    if isinstance(value, float) and value.is_integer():
+        return str(int(value))
+    if isinstance(value, float):
+        return f"{value:.3f}"
+    return str(value)
+
+
+def normalize_config_parameter(name, value):
+    name = name.strip()
+    value = value.strip()
+    if not FLOAT_PATTERN.match(value):
+        return name, value
+
+    numeric_value = float(value)
+    multiplication_match = MULTIPLICATION_SUFFIX_PATTERN.match(name)
+    if multiplication_match:
+        name = multiplication_match.group(1)
+        numeric_value *= float(multiplication_match.group(2))
+    elif name.endswith("2^x"):
+        name = name[: -len("2^x")]
+        numeric_value = 2**numeric_value
+    elif name.endswith("_10"):
+        name = name[: -len("_10")]
+        numeric_value *= 10
+
+    return name, format_numeric_value(numeric_value)
+
+
 def format_config_parameter(parameter):
     if "=" not in parameter:
         return parameter.strip()
 
     name, value = parameter.split("=", 1)
-    value = value.strip()
-    if FLOAT_PATTERN.match(value):
-        value = f"{float(value):.3f}"
-    return f"{name.strip()}={value}"
+    name, value = normalize_config_parameter(name, value)
+    return f"{name}={value}"
+
+
+def format_config_parameter_for_latex(parameter):
+    if "=" not in parameter:
+        return latex_escape(parameter.strip())
+
+    name, value = parameter.split("=", 1)
+    name, value = normalize_config_parameter(name, value)
+
+    latex_names = {
+        "n": r"$n$",
+        "n_step": r"$n\_step$",
+    }
+    latex_name = latex_names.get(name, latex_escape(name))
+    return f"{latex_name}={latex_escape(value)}"
 
 
 def split_config_parameters(config):
@@ -105,10 +148,13 @@ def format_config_for_display(config):
 
 
 def format_config_for_latex(config):
-    rows = [
-        latex_escape(", ".join(chunk))
-        for chunk in chunk_parameters(split_config_parameters(config))
+    if pd.isna(config) or not str(config).strip():
+        return ""
+    parameters = [
+        format_config_parameter_for_latex(parameter)
+        for parameter in str(config).split(",")
     ]
+    rows = [", ".join(chunk) for chunk in chunk_parameters(parameters)]
     if not rows:
         return ""
     return r"\makecell[l]{" + r" \\ ".join(rows) + "}"
@@ -156,6 +202,23 @@ def find_best_configuration(csv_path, metric_column="mae_mean"):
     )
 
 
+def normalize_configuration_headers(configuration):
+    configuration = configuration.copy()
+    configuration = configuration.loc[
+        :, ~configuration.columns.astype(str).str.startswith("Unnamed:")
+    ]
+    configuration.columns = [str(column).strip().lower() for column in configuration.columns]
+
+    deduplicated_configuration = pd.DataFrame(index=configuration.index)
+    for column in dict.fromkeys(configuration.columns):
+        column_values = configuration.loc[:, configuration.columns == column]
+        if isinstance(column_values, pd.Series):
+            deduplicated_configuration[column] = column_values
+        else:
+            deduplicated_configuration[column] = column_values.bfill(axis=1).iloc[:, 0]
+    return deduplicated_configuration
+
+
 def read_dataset_model_configuration(cm_dir):
     """
     Load optional per-dataset/model metadata used to extend the output table.
@@ -169,14 +232,11 @@ def read_dataset_model_configuration(cm_dir):
     if csv_path is None:
         return pd.DataFrame()
 
-    configuration = pd.read_csv(csv_path)
-    configuration = configuration.loc[
-        :, ~configuration.columns.astype(str).str.startswith("Unnamed:")
-    ]
+    configuration = normalize_configuration_headers(pd.read_csv(csv_path))
     if {"dataset", "model"}.issubset(configuration.columns):
         return configuration.set_index(["dataset", "model"])
 
-    configuration = pd.read_csv(csv_path, index_col=[0, 1])
+    configuration = normalize_configuration_headers(pd.read_csv(csv_path, index_col=[0, 1]))
     configuration.index.names = ["dataset", "model"]
     return configuration
 

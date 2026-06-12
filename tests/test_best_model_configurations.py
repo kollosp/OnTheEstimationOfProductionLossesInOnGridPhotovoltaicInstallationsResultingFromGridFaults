@@ -131,15 +131,45 @@ class TestBestModelConfigurations(unittest.TestCase):
         self.assertIn("cnn", set(generated["Model"]))
         self.assertIn("mlp", set(generated["Model"]))
 
+    def test_stored_csv_config_overrides_generated_config_without_duplicate_columns(self):
+        best_model_configurations = load_best_model_configurations_module()
+
+        with tempfile.TemporaryDirectory() as tmp_dir:
+            tmp_path = Path(tmp_dir)
+            cm_path = tmp_path / "cm"
+            cm_path.mkdir()
+            self._write_result(cm_path / "20260601-120000_db0_mlp", [0.3, 0.1], [2, 5])
+            pd.DataFrame(
+                {
+                    "Dataset": ["db0"],
+                    "Model": ["mlp"],
+                    "Config": ["stored_config=1"],
+                }
+            ).to_csv(cm_path / "best_model_configurations.csv", index=False)
+
+            original_cwd = os.getcwd()
+            try:
+                os.chdir(tmp_path)
+                with contextlib.redirect_stdout(io.StringIO()):
+                    best_model_configurations.main()
+            finally:
+                os.chdir(original_cwd)
+
+            generated = pd.read_csv(cm_path / "best_model_configurations_generated.csv")
+
+        self.assertEqual(list(generated.columns), ["Dataset", "Model", "Config"])
+        self.assertEqual(generated.loc[0, "Config"], "stored_config=1")
+
     def test_display_table_formats_names_wraps_configs_and_rounds_floats(self):
         best_model_configurations = load_best_model_configurations_module()
         table = pd.DataFrame(
             {
                 "config": [
                     (
-                        "Bins=37, window_size_days_10=22, "
+                        "Bins=37, window_size_days_10=22, complexity2^x=4, "
                         "conv2D_shape_factor=0.0037580323666489, "
-                        "regressor_degrees=15, bandwidth=0.0104285791052169"
+                        "regressor_degrees=15, bandwidth=0.0104285791052169, "
+                        "n=9, n_step=7, n_estimators*5=13"
                     )
                 ]
             },
@@ -159,10 +189,18 @@ class TestBestModelConfigurations(unittest.TestCase):
         )
 
         self.assertEqual(human_readable.index[0], ("PV1", "$MLP_2$"))
+        self.assertIn("window_size_days=220", human_readable.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn("complexity=16", human_readable.loc[("PV1", "$MLP_2$"), "Config"])
         self.assertIn("conv2D_shape_factor=0.004", human_readable.loc[("PV1", "$MLP_2$"), "Config"])
-        self.assertIn("\nregressor_degrees=15", human_readable.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn("regressor_degrees=15", human_readable.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn("n_estimators=65", human_readable.loc[("PV1", "$MLP_2$"), "Config"])
         self.assertIn(r"\makecell[l]{", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn(r"window\_size\_days=220", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn(r"complexity=16", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
         self.assertIn(r"conv2D\_shape\_factor=0.004", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn(r"$n$=9", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn(r"$n\_step$=7", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
+        self.assertIn(r"n\_estimators=65", latex_table.loc[("PV1", "$MLP_2$"), "Config"])
 
     def test_sort_configurations_by_score_orders_models_within_dataset(self):
         best_model_configurations = load_best_model_configurations_module()
